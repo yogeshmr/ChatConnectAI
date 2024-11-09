@@ -76,7 +76,7 @@ export function registerRoutes(app: Express) {
 
     // Get OpenAI response
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+      model: "gpt-3.5-turbo", // Using the correct model name
       messages: [{ role: "user", content }],
     });
 
