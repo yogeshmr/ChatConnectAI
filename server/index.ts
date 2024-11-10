@@ -26,16 +26,12 @@ if (process.env.NODE_ENV === "production") {
   registerRoutes(app);
 
   // Set up Vite or static file serving after API routes
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV !== "production") {
     console.log("[express] Setting up Vite middleware...");
     await setupVite(app, server);
   } else {
     console.log("[express] Setting up static file serving...");
-    const distPath = path.join(process.cwd(), "dist", "public");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    serveStatic(app);
   }
 
   // Error handling middleware
@@ -46,20 +42,11 @@ if (process.env.NODE_ENV === "production") {
     res.status(status).json({ message });
   });
 
-  // Use different ports for development and production
-  const isDev = process.env.NODE_ENV === "development";
-  const defaultPort = isDev ? "5000" : "3000";
-  const PORT = parseInt(process.env.PORT || defaultPort, 10);
+  // Parse PORT as number to fix type error
+  const PORT = parseInt(process.env.PORT || "5000", 10);
   const HOST = "0.0.0.0";
 
   server.listen(PORT, HOST, () => {
-    const formattedTime = new Date().toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
-
-    console.log(`${formattedTime} [express] Server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`);
+    console.log(`[express] Server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`);
   });
 })();

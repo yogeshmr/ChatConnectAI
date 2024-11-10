@@ -44,16 +44,12 @@ export function setupAuth(app: Express) {
       checkPeriod: 86400000,
     }),
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false for development
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
-      sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax'
+      sameSite: 'lax'
     },
   };
-
-  if (process.env.NODE_ENV === "production") {
-    app.set("trust proxy", 1);
-  }
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
@@ -118,6 +114,7 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Register route
   app.post("/register", async (req, res, next) => {
     try {
       console.log("[Auth] Registration attempt:", req.body.username);
@@ -174,6 +171,7 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Login route
   app.post("/login", (req, res, next) => {
     console.log("[Auth] Login attempt:", req.body.username);
     const result = insertUserSchema.safeParse(req.body);
@@ -209,6 +207,7 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
+  // Logout route
   app.post("/logout", (req, res) => {
     if (req.user) {
       console.log(`[Auth] Logging out user: ${req.user.username}`);
@@ -223,6 +222,7 @@ export function setupAuth(app: Express) {
     });
   });
 
+  // Get current user route
   app.get("/api/user", (req, res) => {
     if (req.isAuthenticated()) {
       console.log(`[Auth] User session verified: ${req.user.username}`);

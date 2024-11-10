@@ -1,14 +1,15 @@
 import useSWR from "swr";
 import type { User, InsertUser } from "db/schema";
 import { useEffect } from "react";
+import { useLocation } from "wouter";
 
 export function useUser() {
+  const [, setLocation] = useLocation();
   const { data, error, mutate } = useSWR<User, Error>("/api/user", {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
     refreshInterval: 0,
-    dedupingInterval: 0,
-    credentials: 'include'
+    dedupingInterval: 0
   });
 
   // Add logging for debugging
@@ -70,7 +71,15 @@ export function useUser() {
         }
 
         console.log("[Auth] Logout successful, clearing user cache");
-        await mutate(undefined, { revalidate: false }); // Clear user data without revalidating
+        await mutate(undefined, { 
+          revalidate: false,
+          rollbackOnError: false,
+          populateCache: false 
+        });
+        
+        // Redirect to login page after successful logout
+        setLocation("/login");
+        
         return { ok: true };
       } catch (e: any) {
         console.error("[Auth] Logout error:", e);
