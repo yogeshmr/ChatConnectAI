@@ -2,7 +2,7 @@ import { type Express } from "express";
 import { setupAuth } from "./auth";
 import { db } from "db";
 import { conversations, messages } from "db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { openai } from "./openai";
 
 export function registerRoutes(app: Express) {
@@ -40,6 +40,54 @@ export function registerRoutes(app: Express) {
     res.json(conversation);
   });
 
+  // Update a conversation
+  app.patch("/api/conversations/:id", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { title, starred, archived } = req.body;
+    const conversationId = parseInt(req.params.id);
+
+    const [conversation] = await db
+      .update(conversations)
+      .set({ 
+        ...(title && { title }),
+        ...(starred !== undefined && { starred }),
+        ...(archived !== undefined && { archived }),
+        lastActive: new Date(),
+      })
+      .where(eq(conversations.id, conversationId))
+      .returning();
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    res.json(conversation);
+  });
+
+  // Delete conversations (single or bulk)
+  app.delete("/api/conversations", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { ids } = req.body;
+    const conversationIds = Array.isArray(ids) ? ids : [ids];
+
+    await db
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.userId, req.user.id),
+          inArray(conversations.id, conversationIds)
+        )
+      );
+
+    res.status(204).end();
+  });
+
   // Get messages for a conversation
   app.get("/api/conversations/:id/messages", async (req, res) => {
     if (!req.user) {
@@ -64,6 +112,12 @@ export function registerRoutes(app: Express) {
     const { content } = req.body;
     const conversationId = parseInt(req.params.id);
 
+    // Update conversation's lastActive timestamp
+    await db
+      .update(conversations)
+      .set({ lastActive: new Date() })
+      .where(eq(conversations.id, conversationId));
+
     // Save user message
     const [userMessage] = await db
       .insert(messages)
@@ -76,7 +130,7 @@ export function registerRoutes(app: Express) {
 
     // Get OpenAI response
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Using the correct model name
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content }],
     });
 

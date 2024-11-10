@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -13,6 +13,9 @@ export const conversations = pgTable("conversations", {
   title: text("title").notNull(),
   userId: integer("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastActive: timestamp("last_active").defaultNow(),
+  starred: boolean("starred").default(false).notNull(),
+  archived: boolean("archived").default(false).notNull(),
 });
 
 export const messages = pgTable("messages", {

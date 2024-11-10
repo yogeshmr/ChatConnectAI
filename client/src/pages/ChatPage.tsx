@@ -19,6 +19,8 @@ export default function ChatPage() {
     activeConversationId,
     isLoading,
     createConversation,
+    updateConversation,
+    deleteConversations,
     sendMessage,
     selectConversation
   } = useChat();
@@ -50,6 +52,8 @@ export default function ChatPage() {
             conversations={conversations}
             activeId={activeConversationId}
             onSelect={selectConversation}
+            onUpdate={updateConversation}
+            onDelete={(id) => deleteConversations([id])}
           />
         </ScrollArea>
       </div>
