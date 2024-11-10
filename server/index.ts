@@ -30,6 +30,7 @@ if (process.env.NODE_ENV === "production") {
     console.log("[express] Setting up Vite middleware...");
     await setupVite(app, server);
   } else {
+    console.log("[express] Setting up static file serving...");
     const distPath = path.join(process.cwd(), "dist", "public");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
@@ -45,7 +46,10 @@ if (process.env.NODE_ENV === "production") {
     res.status(status).json({ message });
   });
 
-  const PORT = 5000;
+  // Use different ports for development and production
+  const isDev = process.env.NODE_ENV === "development";
+  const defaultPort = isDev ? "5000" : "3000";
+  const PORT = parseInt(process.env.PORT || defaultPort, 10);
   const HOST = "0.0.0.0";
 
   server.listen(PORT, HOST, () => {
