@@ -21,11 +21,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { login } = useUser();
+  const { login, user, isLoading: userLoading } = useUser();
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
   
   const form = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
@@ -35,16 +37,53 @@ export default function LoginPage() {
     },
   });
 
-  const onSubmit = async (data: InsertUser) => {
-    const result = await login(data);
-    if (result.ok) {
+  // Handle redirection when user state updates
+  useEffect(() => {
+    if (user) {
+      console.log("[Auth] User authenticated, redirecting to homepage");
       setLocation("/");
-    } else {
+    }
+  }, [user, setLocation]);
+
+  // Don't render form if user is already logged in
+  if (userLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (user) {
+    return null;
+  }
+
+  const onSubmit = async (data: InsertUser) => {
+    setIsLoading(true);
+    try {
+      console.log("[Auth] Submitting login form");
+      const result = await login(data);
+      console.log("[Auth] Login response:", result);
+      console.log("[Auth] User state after login:", user);
+      if (result.ok) {
+        toast({
+          title: "Login Successful",
+          description: "Welcome back!",
+        });
+        // Redirection will be handled by the useEffect hook when user state updates
+      } else {
+        console.error("[Auth] Login form submission failed:", result.message);
+        toast({
+          title: "Login Failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("[Auth] Unexpected error during login:", error);
       toast({
-        title: "Login Failed",
-        description: result.message,
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -67,7 +106,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -80,14 +119,22 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input 
+                        type="password" 
+                        {...field} 
+                        disabled={isLoading}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Login
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Logging in..." : "Login"}
               </Button>
             </form>
           </Form>
@@ -97,6 +144,7 @@ export default function LoginPage() {
               variant="link"
               className="p-0"
               onClick={() => setLocation("/register")}
+              disabled={isLoading}
             >
               Register
             </Button>

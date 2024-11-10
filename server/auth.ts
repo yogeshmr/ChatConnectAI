@@ -28,7 +28,6 @@ const crypto = {
   },
 };
 
-// extend express user object with our schema
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -41,26 +40,38 @@ export function setupAuth(app: Express) {
     secret: process.env.REPL_ID || "porygon-supremacy",
     resave: false,
     saveUninitialized: false,
-    cookie: {},
     store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+      checkPeriod: 86400000,
     }),
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax'
+    },
   };
 
-  if (app.get("env") === "production") {
+  if (process.env.NODE_ENV === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie = {
-      secure: true,
-    };
   }
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Add request logging middleware
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    if (req.user) {
+      console.log(`[Auth] Authenticated user: ${req.user.username}`);
+    }
+    next();
+  });
+
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log(`[Auth] Login attempt for user: ${username}`);
         const [user] = await db
           .select()
           .from(users)
@@ -68,25 +79,33 @@ export function setupAuth(app: Express) {
           .limit(1);
 
         if (!user) {
+          console.log(`[Auth] User not found: ${username}`);
           return done(null, false, { message: "Incorrect username." });
         }
+
         const isMatch = await crypto.compare(password, user.password);
         if (!isMatch) {
+          console.log(`[Auth] Invalid password for user: ${username}`);
           return done(null, false, { message: "Incorrect password." });
         }
+
+        console.log(`[Auth] Login successful for user: ${username}`);
         return done(null, user);
       } catch (err) {
+        console.error("[Auth] Login error:", err);
         return done(err);
       }
     })
   );
 
   passport.serializeUser((user, done) => {
+    console.log(`[Auth] Serializing user: ${user.username}`);
     done(null, user.id);
   });
 
   passport.deserializeUser(async (id: number, done) => {
     try {
+      console.log(`[Auth] Deserializing user ID: ${id}`);
       const [user] = await db
         .select()
         .from(users)
@@ -94,14 +113,17 @@ export function setupAuth(app: Express) {
         .limit(1);
       done(null, user);
     } catch (err) {
+      console.error("[Auth] Deserialization error:", err);
       done(err);
     }
   });
 
   app.post("/register", async (req, res, next) => {
     try {
+      console.log("[Auth] Registration attempt:", req.body.username);
       const result = insertUserSchema.safeParse(req.body);
       if (!result.success) {
+        console.log("[Auth] Registration validation failed:", result.error);
         return res
           .status(400)
           .json({ message: "Invalid input", errors: result.error.flatten() });
@@ -117,6 +139,7 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (existingUser) {
+        console.log(`[Auth] Username already exists: ${username}`);
         return res.status(400).json({ message: "Username already exists" });
       }
 
@@ -132,9 +155,12 @@ export function setupAuth(app: Express) {
         })
         .returning();
 
+      console.log(`[Auth] User registered successfully: ${username}`);
+
       // Log the user in after registration
       req.login(newUser, (err) => {
         if (err) {
+          console.error("[Auth] Auto-login after registration failed:", err);
           return next(err);
         }
         return res.json({
@@ -143,53 +169,66 @@ export function setupAuth(app: Express) {
         });
       });
     } catch (error) {
+      console.error("[Auth] Registration error:", error);
       next(error);
     }
   });
 
   app.post("/login", (req, res, next) => {
+    console.log("[Auth] Login attempt:", req.body.username);
     const result = insertUserSchema.safeParse(req.body);
     if (!result.success) {
+      console.log("[Auth] Login validation failed:", result.error);
       return res
         .status(400)
         .json({ message: "Invalid input", errors: result.error.flatten() });
     }
 
-    const cb = (err: any, user: Express.User, info: IVerifyOptions) => {
+    passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
       if (err) {
+        console.error("[Auth] Login error:", err);
         return next(err);
       }
       if (!user) {
+        console.log("[Auth] Login failed:", info.message);
         return res.status(400).json({
           message: info.message ?? "Login failed",
         });
       }
       req.logIn(user, (err) => {
         if (err) {
+          console.error("[Auth] Session creation error:", err);
           return next(err);
         }
+        console.log(`[Auth] Login successful: ${user.username}`);
         return res.json({
           message: "Login successful",
           user: { id: user.id, username: user.username },
         });
       });
-    };
-    passport.authenticate("local", cb)(req, res, next);
+    })(req, res, next);
   });
 
   app.post("/logout", (req, res) => {
+    if (req.user) {
+      console.log(`[Auth] Logging out user: ${req.user.username}`);
+    }
     req.logout((err) => {
       if (err) {
+        console.error("[Auth] Logout error:", err);
         return res.status(500).json({ message: "Logout failed" });
       }
+      console.log("[Auth] Logout successful");
       res.json({ message: "Logout successful" });
     });
   });
 
   app.get("/api/user", (req, res) => {
     if (req.isAuthenticated()) {
+      console.log(`[Auth] User session verified: ${req.user.username}`);
       return res.json(req.user);
     }
+    console.log("[Auth] Unauthorized access to /api/user");
     res.status(401).json({ message: "Unauthorized" });
   });
 }
