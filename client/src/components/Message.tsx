@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Play, Loader2 } from "lucide-react";
+import { Play, Loader2, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface MessageProps {
@@ -18,8 +18,27 @@ export default function Message({ message }: MessageProps) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [codeOutput, setCodeOutput] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const copyToClipboard = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      toast({
+        title: "Code copied",
+        description: "Code has been copied to clipboard",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy code to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
 
   const executeCode = async (code: string, language: string) => {
     if (language !== 'python') {
@@ -70,7 +89,20 @@ export default function Message({ message }: MessageProps) {
 
   const CodeBlock = ({ language = "", value = "" }) => (
     <div className="relative group">
-      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      <div className="absolute right-2 top-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => copyToClipboard(value)}
+          className="gap-2"
+        >
+          {isCopied ? (
+            <Check className="w-4 h-4" />
+          ) : (
+            <Copy className="w-4 h-4" />
+          )}
+          {isCopied ? "Copied!" : "Copy"}
+        </Button>
         {language === 'python' && (
           <Button
             size="sm"
@@ -99,8 +131,12 @@ export default function Message({ message }: MessageProps) {
             margin: 0,
             borderRadius: '0.5rem',
             padding: '1rem',
+            fontSize: '0.875rem',
           }}
           className="!bg-muted"
+          showLineNumbers={true}
+          wrapLines={true}
+          wrapLongLines={true}
         >
           {value}
         </SyntaxHighlighter>
@@ -159,7 +195,7 @@ export default function Message({ message }: MessageProps) {
 
               return (
                 <code className={cn(
-                  "px-1 py-0.5 rounded-md",
+                  "px-1 py-0.5 rounded-md font-mono text-sm",
                   inline ? "bg-muted-foreground/20" : "block my-4",
                   className
                 )} {...props}>
