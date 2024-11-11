@@ -1,6 +1,6 @@
 import passport from "passport";
 import { IVerifyOptions, Strategy as LocalStrategy } from "passport-local";
-import { type Express } from "express";
+import { type Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -34,6 +34,14 @@ declare global {
   }
 }
 
+// Authentication middleware
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  next();
+};
+
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const sessionSettings: session.SessionOptions = {
@@ -44,13 +52,14 @@ export function setupAuth(app: Express) {
       checkPeriod: 86400000,
     }),
     cookie: {
-      secure: false, // Set to false for development
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
       sameSite: 'lax'
     },
   };
 
+  // Initialize session middleware first
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
@@ -107,6 +116,11 @@ export function setupAuth(app: Express) {
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
+      
+      if (!user) {
+        return done(null, false);
+      }
+      
       done(null, user);
     } catch (err) {
       console.error("[Auth] Deserialization error:", err);
@@ -223,12 +237,10 @@ export function setupAuth(app: Express) {
   });
 
   // Get current user route
-  app.get("/api/user", (req, res) => {
-    if (req.isAuthenticated()) {
-      console.log(`[Auth] User session verified: ${req.user.username}`);
-      return res.json(req.user);
-    }
-    console.log("[Auth] Unauthorized access to /api/user");
-    res.status(401).json({ message: "Unauthorized" });
+  app.get("/api/user", requireAuth, (req, res) => {
+    console.log(`[Auth] User session verified: ${req.user.username}`);
+    res.json(req.user);
   });
+
+  return { requireAuth }; // Export the middleware for use in other routes
 }
