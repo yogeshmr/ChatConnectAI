@@ -17,6 +17,14 @@ export function useChat() {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  const resetChat = async () => {
+    setActiveConversationId(undefined);
+    await Promise.all([
+      mutateMessages([]),
+      mutateConversations([])
+    ]);
+  };
+
   const createConversation = async () => {
     try {
       const response = await fetch("/api/conversations", {
@@ -114,5 +122,6 @@ export function useChat() {
     deleteConversations,
     sendMessage,
     selectConversation,
+    resetChat,
   };
 }

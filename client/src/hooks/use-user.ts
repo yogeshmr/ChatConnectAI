@@ -4,12 +4,13 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export function useUser() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data, error, mutate } = useSWR<User, Error>("/api/user", {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
     refreshInterval: 0,
-    dedupingInterval: 0
+    dedupingInterval: 0,
+    errorRetryCount: 0
   });
 
   // Add logging for debugging
@@ -18,9 +19,37 @@ export function useUser() {
       console.log("[Auth] User state updated:", { id: data.id, username: data.username });
     }
     if (error) {
-      console.error("[Auth] Authentication error:", error);
+      console.log("[Auth] Authentication error:", error);
+      if (error.message === "Authentication required" && 
+          !location.startsWith("/login") && 
+          !location.startsWith("/register")) {
+        console.log("[Auth] Redirecting to login due to authentication error");
+        setLocation("/login");
+      }
     }
-  }, [data, error]);
+  }, [data, error, setLocation, location]);
+
+  const clearAllCookies = () => {
+    // Get all cookies and remove them
+    const cookies = document.cookie.split(";");
+    for (let cookie of cookies) {
+      const eqPos = cookie.indexOf("=");
+      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+      // Remove cookie for all possible paths and domains
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`;
+    }
+  };
+
+  const clearLocalStorage = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (error) {
+      console.error("[Auth] Error clearing storage:", error);
+    }
+  };
 
   return {
     user: data,
@@ -58,31 +87,46 @@ export function useUser() {
     logout: async () => {
       try {
         console.log("[Auth] Attempting logout...");
-        const response = await fetch("/logout", {
-          method: "POST",
-          credentials: "include",
-        });
-
-        const data = await response.json();
         
-        if (!response.ok) {
-          console.error("[Auth] Logout failed:", data.message);
-          return { ok: false, message: data.message };
-        }
-
-        console.log("[Auth] Logout successful, clearing user cache");
+        // First, clear all client-side state
+        clearLocalStorage();
+        clearAllCookies();
+        
+        // Clear the SWR cache and set user to undefined
         await mutate(undefined, { 
           revalidate: false,
           rollbackOnError: false,
           populateCache: false 
         });
-        
-        // Redirect to login page after successful logout
+
+        // Make the logout request
+        const response = await fetch("/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+
+        let result = { ok: true };
+        try {
+          const data = await response.json();
+          if (!response.ok) {
+            console.error("[Auth] Logout failed:", data.message);
+            result = { ok: false, message: data.message };
+          }
+        } catch (e) {
+          console.warn("[Auth] Could not parse logout response:", e);
+        }
+
+        // Redirect to login page immediately after clearing state
+        console.log("[Auth] Logout complete, redirecting to login");
         setLocation("/login");
         
-        return { ok: true };
+        return result;
       } catch (e: any) {
         console.error("[Auth] Logout error:", e);
+        // Still clear state and redirect on error
+        clearLocalStorage();
+        clearAllCookies();
+        setLocation("/login");
         return { 
           ok: false, 
           message: e.message || "Failed to connect to the server" 
