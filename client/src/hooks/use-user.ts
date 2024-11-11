@@ -88,44 +88,44 @@ export function useUser() {
       try {
         console.log("[Auth] Attempting logout...");
         
-        // First, clear all client-side state
+        // First, clear the SWR cache and set user to undefined
+        // This ensures the UI updates immediately
+        await mutate(undefined, { 
+          revalidate: false,
+          optimisticData: undefined,
+          rollbackOnError: false
+        });
+        
+        // Clear all client-side state
         clearLocalStorage();
         clearAllCookies();
         
-        // Clear the SWR cache and set user to undefined
-        await mutate(undefined, { 
-          revalidate: false,
-          rollbackOnError: false,
-          populateCache: false 
-        });
-
-        // Make the logout request
+        // Redirect to login page immediately
+        setLocation("/login");
+        
+        // Make the logout request after state is cleared
         const response = await fetch("/logout", {
           method: "POST",
           credentials: "include",
+          headers: {
+            "Content-Type": "application/json"
+          }
         });
 
-        let result = { ok: true };
-        try {
+        if (!response.ok) {
           const data = await response.json();
-          if (!response.ok) {
-            console.error("[Auth] Logout failed:", data.message);
-            result = { ok: false, message: data.message };
-          }
-        } catch (e) {
-          console.warn("[Auth] Could not parse logout response:", e);
+          console.error("[Auth] Logout failed:", data.message);
+          return { ok: false, message: data.message };
         }
 
-        // Redirect to login page immediately after clearing state
-        console.log("[Auth] Logout complete, redirecting to login");
-        setLocation("/login");
-        
-        return result;
+        console.log("[Auth] Logout successful");
+        return { ok: true };
       } catch (e: any) {
         console.error("[Auth] Logout error:", e);
-        // Still clear state and redirect on error
+        // Even if the request fails, we want to ensure the user is logged out locally
         clearLocalStorage();
         clearAllCookies();
+        await mutate(undefined, { revalidate: false });
         setLocation("/login");
         return { 
           ok: false, 

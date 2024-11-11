@@ -44,8 +44,6 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const isDevelopment = process.env.NODE_ENV === "development";
-  const HOST = process.env.HOST || "0.0.0.0";
-  const PORT = parseInt(process.env.PORT || "5000", 10);
   
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || process.env.REPL_ID || "your-secret-key",
@@ -129,43 +127,51 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Enhanced logout route with better session cleanup
+  // Enhanced logout route with better session cleanup and CORS handling
   app.post("/logout", (req, res) => {
-    if (req.user) {
-      const username = (req.user as SelectUser).username;
-      console.log(`[Auth] Logging out user: ${username}`);
-      
-      req.logout((err) => {
+    if (!req.user) {
+      console.log("[Auth] Logout requested but no user session found");
+      return res.status(200).json({ message: "No active session" });
+    }
+
+    const username = (req.user as SelectUser).username;
+    console.log(`[Auth] Logging out user: ${username}`);
+
+    // Clear session and remove user
+    req.logout((err) => {
+      if (err) {
+        console.error("[Auth] Logout error:", err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+
+      // Destroy session
+      req.session.destroy((err) => {
         if (err) {
-          console.error("[Auth] Logout error:", err);
+          console.error("[Auth] Session destruction error:", err);
           return res.status(500).json({ message: "Logout failed" });
         }
+
+        // Set response headers
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+
+        // Clear session cookie with same settings as it was set
+        const cookieOptions = {
+          path: '/',
+          httpOnly: true,
+          secure: !isDevelopment,
+          sameSite: isDevelopment ? 'lax' : 'strict',
+          domain: isDevelopment ? undefined : process.env.REPL_SLUG ? '.repl.co' : undefined
+        };
+
+        res.clearCookie('session.id', cookieOptions);
         
-        req.session.destroy((err) => {
-          if (err) {
-            console.error("[Auth] Session destruction error:", err);
-            return res.status(500).json({ message: "Logout failed" });
-          }
-          
-          // Clear session cookie with same settings as it was set
-          const cookieOptions = {
-            path: '/',
-            httpOnly: true,
-            secure: !isDevelopment,
-            sameSite: isDevelopment ? 'lax' : 'strict',
-            domain: isDevelopment ? undefined : process.env.REPL_SLUG ? '.repl.co' : undefined
-          };
-          
-          res.clearCookie('session.id', cookieOptions);
-          
-          console.log(`[Auth] Logout successful for user: ${username}`);
-          res.json({ message: "Logout successful" });
-        });
+        console.log(`[Auth] Logout successful for user: ${username}`);
+        res.json({ message: "Logout successful" });
       });
-    } else {
-      console.log("[Auth] Logout requested but no user session found");
-      res.status(200).json({ message: "No active session" });
-    }
+    });
   });
 
   app.post("/login", (req, res, next) => {
