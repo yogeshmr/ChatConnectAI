@@ -34,6 +34,7 @@ declare global {
   }
 }
 
+// Authentication middleware
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Authentication required" });
@@ -43,34 +44,34 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
 
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
-  const isDevelopment = process.env.NODE_ENV === "development";
-  const HOST = process.env.HOST || "0.0.0.0";
-  const PORT = parseInt(process.env.PORT || "5000", 10);
-  
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || process.env.REPL_ID || "your-secret-key",
+    secret: process.env.REPL_ID || "porygon-supremacy",
     resave: false,
     saveUninitialized: false,
     store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+      checkPeriod: 86400000,
     }),
     cookie: {
-      secure: !isDevelopment,
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: isDevelopment ? 'lax' : 'strict',
-      path: '/',
-      domain: isDevelopment ? undefined : process.env.REPL_SLUG ? '.repl.co' : undefined
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: 'lax'
     },
-    name: 'session.id',
-    proxy: true,
-    rolling: true // Refresh session with each request
   };
 
-  app.set('trust proxy', 1);
+  // Initialize session middleware first
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // Add request logging middleware
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    if (req.user) {
+      console.log(`[Auth] Authenticated user: ${req.user.username}`);
+    }
+    next();
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -84,13 +85,13 @@ export function setupAuth(app: Express) {
 
         if (!user) {
           console.log(`[Auth] User not found: ${username}`);
-          return done(null, false, { message: "Incorrect username or password." });
+          return done(null, false, { message: "Incorrect username." });
         }
 
         const isMatch = await crypto.compare(password, user.password);
         if (!isMatch) {
           console.log(`[Auth] Invalid password for user: ${username}`);
-          return done(null, false, { message: "Incorrect username or password." });
+          return done(null, false, { message: "Incorrect password." });
         }
 
         console.log(`[Auth] Login successful for user: ${username}`);
@@ -117,11 +118,9 @@ export function setupAuth(app: Express) {
         .limit(1);
       
       if (!user) {
-        console.log(`[Auth] User not found for ID: ${id}`);
         return done(null, false);
       }
       
-      console.log(`[Auth] Successfully deserialized user: ${user.username}`);
       done(null, user);
     } catch (err) {
       console.error("[Auth] Deserialization error:", err);
@@ -129,72 +128,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Enhanced logout route with better session cleanup
-  app.post("/logout", (req, res) => {
-    if (req.user) {
-      const username = (req.user as SelectUser).username;
-      console.log(`[Auth] Logging out user: ${username}`);
-      
-      req.logout((err) => {
-        if (err) {
-          console.error("[Auth] Logout error:", err);
-          return res.status(500).json({ message: "Logout failed" });
-        }
-        
-        req.session.destroy((err) => {
-          if (err) {
-            console.error("[Auth] Session destruction error:", err);
-            return res.status(500).json({ message: "Logout failed" });
-          }
-          
-          // Clear session cookie with same settings as it was set
-          const cookieOptions = {
-            path: '/',
-            httpOnly: true,
-            secure: !isDevelopment,
-            sameSite: isDevelopment ? 'lax' : 'strict',
-            domain: isDevelopment ? undefined : process.env.REPL_SLUG ? '.repl.co' : undefined
-          };
-          
-          res.clearCookie('session.id', cookieOptions);
-          
-          console.log(`[Auth] Logout successful for user: ${username}`);
-          res.json({ message: "Logout successful" });
-        });
-      });
-    } else {
-      console.log("[Auth] Logout requested but no user session found");
-      res.status(200).json({ message: "No active session" });
-    }
-  });
-
-  app.post("/login", (req, res, next) => {
-    console.log("[Auth] Login attempt:", req.body.username);
-    passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
-      if (err) {
-        console.error("[Auth] Login error:", err);
-        return next(err);
-      }
-      if (!user) {
-        console.log("[Auth] Login failed:", info.message);
-        return res.status(400).json({
-          message: info.message ?? "Login failed",
-        });
-      }
-      req.logIn(user, (err) => {
-        if (err) {
-          console.error("[Auth] Session creation error:", err);
-          return next(err);
-        }
-        console.log(`[Auth] Login successful: ${user.username}`);
-        return res.json({
-          message: "Login successful",
-          user: { id: user.id, username: user.username },
-        });
-      });
-    })(req, res, next);
-  });
-
+  // Register route
   app.post("/register", async (req, res, next) => {
     try {
       console.log("[Auth] Registration attempt:", req.body.username);
@@ -220,7 +154,10 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
+      // Hash the password
       const hashedPassword = await crypto.hash(password);
+
+      // Create the new user
       const [newUser] = await db
         .insert(users)
         .values({
@@ -231,6 +168,7 @@ export function setupAuth(app: Express) {
 
       console.log(`[Auth] User registered successfully: ${username}`);
 
+      // Log the user in after registration
       req.login(newUser, (err) => {
         if (err) {
           console.error("[Auth] Auto-login after registration failed:", err);
@@ -247,13 +185,62 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/user", requireAuth, (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Authentication required" });
+  // Login route
+  app.post("/login", (req, res, next) => {
+    console.log("[Auth] Login attempt:", req.body.username);
+    const result = insertUserSchema.safeParse(req.body);
+    if (!result.success) {
+      console.log("[Auth] Login validation failed:", result.error);
+      return res
+        .status(400)
+        .json({ message: "Invalid input", errors: result.error.flatten() });
     }
+
+    passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
+      if (err) {
+        console.error("[Auth] Login error:", err);
+        return next(err);
+      }
+      if (!user) {
+        console.log("[Auth] Login failed:", info.message);
+        return res.status(400).json({
+          message: info.message ?? "Login failed",
+        });
+      }
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error("[Auth] Session creation error:", err);
+          return next(err);
+        }
+        console.log(`[Auth] Login successful: ${user.username}`);
+        return res.json({
+          message: "Login successful",
+          user: { id: user.id, username: user.username },
+        });
+      });
+    })(req, res, next);
+  });
+
+  // Logout route
+  app.post("/logout", (req, res) => {
+    if (req.user) {
+      console.log(`[Auth] Logging out user: ${req.user.username}`);
+    }
+    req.logout((err) => {
+      if (err) {
+        console.error("[Auth] Logout error:", err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      console.log("[Auth] Logout successful");
+      res.json({ message: "Logout successful" });
+    });
+  });
+
+  // Get current user route
+  app.get("/api/user", requireAuth, (req, res) => {
     console.log(`[Auth] User session verified: ${req.user.username}`);
     res.json(req.user);
   });
 
-  return { requireAuth };
+  return { requireAuth }; // Export the middleware for use in other routes
 }

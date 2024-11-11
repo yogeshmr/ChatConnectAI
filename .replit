@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "python-3.11"]
+modules = ["nodejs-20", "web"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 [nix]
@@ -73,10 +73,6 @@ args = "Schema Push"
 task = "workflow.run"
 args = "Full Stack App"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Client Build"
-
 [[workflows.workflow]]
 name = "Production Build"
 author = "agent"
@@ -134,17 +130,3 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run db:push"
-
-[[workflows.workflow]]
-name = "Client Build"
-author = "agent"
-
-[workflows.workflow.metadata]
-agentRequireRestartOnSave = false
-
-[[workflows.workflow.tasks]]
-task = "packager.installForAll"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run build"

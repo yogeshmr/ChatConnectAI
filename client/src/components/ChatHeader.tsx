@@ -1,6 +1,5 @@
 import { useUser } from "../hooks/use-user";
 import { useLocation } from "wouter";
-import { useChat } from "../hooks/use-chat";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,38 +16,35 @@ import {
   User,
   Settings,
   LogOut,
+  Menu,
+  HelpCircle,
+  BookOpen,
+  Package,
+  Building2,
+  Wrench,
+  Cpu,
+  Zap,
+  Sliders,
+  BarChart3,
+  Play,
+  Shield,
+  CircuitBoard,
+  FileText,
+  Boxes,
+  ListTodo,
+  TestTube,
+  Factory,
+  Users,
+  Briefcase,
+  Phone,
+  Newspaper,
+  LineChart,
+  PieChart,
 } from "lucide-react";
 
-interface ChatHeaderProps {
-  children?: React.ReactNode;
-}
-
-export default function ChatHeader({ children }: ChatHeaderProps) {
+export default function ChatHeader() {
   const { user, logout } = useUser();
   const [, setLocation] = useLocation();
-  const { resetChat } = useChat();
-
-  const handleLogout = async () => {
-    try {
-      console.log("[Auth] Starting logout process");
-      
-      // Reset chat state before logout to prevent state persistence issues
-      resetChat();
-      
-      // Perform logout
-      const result = await logout();
-      
-      if (!result.ok) {
-        console.error("[Auth] Logout failed:", result.message);
-        // Redirect to login even on error to ensure user is logged out
-        setLocation("/login");
-      }
-    } catch (error) {
-      console.error("[Auth] Logout error:", error);
-      // Force redirect to login on error
-      setLocation("/login");
-    }
-  };
 
   if (!user) {
     return (
@@ -72,7 +68,112 @@ export default function ChatHeader({ children }: ChatHeaderProps) {
     <header className="border-b p-4">
       <div className="flex justify-between items-center max-w-3xl mx-auto">
         <div className="flex items-center gap-2">
-          {children}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Research</DropdownMenuLabel>
+              <DropdownMenuItem>
+                <Cpu className="mr-2 h-4 w-4" />
+                Analog Electronics
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <CircuitBoard className="mr-2 h-4 w-4" />
+                Digital Electronics
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Zap className="mr-2 h-4 w-4" />
+                Power Electronics
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Sliders className="mr-2 h-4 w-4" />
+                Control Systems
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <PieChart className="mr-2 h-4 w-4" />
+                Signal Processing
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Analysis
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Play className="mr-2 h-4 w-4" />
+                Simulation
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Shield className="mr-2 h-4 w-4" />
+                EMI_EMC
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Wrench className="mr-2 h-4 w-4" />
+                PCB Design
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <FileText className="mr-2 h-4 w-4" />
+                Standards
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              
+              <DropdownMenuLabel>Products</DropdownMenuLabel>
+              <DropdownMenuItem>
+                <Wrench className="mr-2 h-4 w-4" />
+                Design Tools
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Analysis
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Play className="mr-2 h-4 w-4" />
+                Simulation
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Boxes className="mr-2 h-4 w-4" />
+                BOM
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <ListTodo className="mr-2 h-4 w-4" />
+                Prototyping
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <TestTube className="mr-2 h-4 w-4" />
+                Testing
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Factory className="mr-2 h-4 w-4" />
+                Manufacturing
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuLabel>Company</DropdownMenuLabel>
+              <DropdownMenuItem>
+                <Building2 className="mr-2 h-4 w-4" />
+                About Us
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Users className="mr-2 h-4 w-4" />
+                Our Team
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Briefcase className="mr-2 h-4 w-4" />
+                Careers
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Phone className="mr-2 h-4 w-4" />
+                Contact
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Newspaper className="mr-2 h-4 w-4" />
+                Blog
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <h1 className="text-xl font-semibold">gibivi.ai</h1>
         </div>
         
@@ -106,10 +207,23 @@ export default function ChatHeader({ children }: ChatHeaderProps) {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             
-            <DropdownMenuItem 
-              onClick={handleLogout}
-              className="text-red-600 focus:text-red-600"
-            >
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <HelpCircle className="mr-2 h-4 w-4" />
+                Help & Support
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem>
+                  Documentation
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  Contact Support
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => logout()}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </DropdownMenuItem>
